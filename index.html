@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Always Perfect Eggs</title>
+  <style>
+    :root {
+      --cream: #fdf6e3;
+      --ink: #3f3428;
+      --button: #ffd166;
+      --button-dark: #f4a261;
+      --button-border: #7c4d2a;
+      --panel: #fff9ec;
+      --shadow: rgba(124, 77, 42, 0.22);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background:
+        linear-gradient(45deg, rgba(255, 209, 102, 0.13) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(255, 209, 102, 0.13) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(244, 162, 97, 0.12) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(244, 162, 97, 0.12) 75%),
+        var(--cream);
+      background-position: 0 0, 0 16px, 16px -16px, -16px 0;
+      background-size: 32px 32px;
+      color: var(--ink);
+      font-family: "Courier New", Courier, monospace;
+    }
+
+    main {
+      width: min(92vw, 520px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 22px;
+      padding: 36px 24px;
+      text-align: center;
+    }
+
+    .egg-frame {
+      width: 304px;
+      height: 304px;
+      display: grid;
+      place-items: center;
+      border: 6px solid var(--button-border);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 12px 0 var(--shadow);
+    }
+
+    #eggImage {
+      width: 256px;
+      height: 256px;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    #timer {
+      min-width: 6ch;
+      font-size: clamp(3rem, 12vw, 5.5rem);
+      font-weight: 900;
+      line-height: 1;
+      text-shadow: 4px 4px 0 rgba(255, 209, 102, 0.65);
+    }
+
+    #status {
+      min-height: 1.7em;
+      margin: -8px 0 0;
+      font-size: clamp(1rem, 4vw, 1.35rem);
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 14px;
+    }
+
+    button {
+      min-width: 112px;
+      padding: 14px 18px;
+      border: 4px solid var(--button-border);
+      border-radius: 8px;
+      background: var(--button);
+      color: var(--ink);
+      box-shadow: 0 7px 0 var(--button-border);
+      cursor: pointer;
+      font: 900 1.1rem/1 "Courier New", Courier, monospace;
+      transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
+    }
+
+    button:hover {
+      background: var(--button-dark);
+      transform: translateY(-2px) scale(1.04);
+      box-shadow: 0 9px 0 var(--button-border);
+    }
+
+    button:active {
+      transform: translateY(5px) scale(0.99);
+      box-shadow: 0 2px 0 var(--button-border);
+    }
+
+    @media (max-width: 380px) {
+      .egg-frame {
+        width: 280px;
+        height: 280px;
+      }
+
+      #eggImage {
+        width: 240px;
+        height: 240px;
+      }
+
+      button {
+        min-width: 92px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main aria-label="Egg timer">
+    <div class="egg-frame">
+      <!-- Replace these image files with your 64x64 pixel art assets:
+           egg-1.png, egg-2.png, egg-3.png, egg-4.png, egg-5.png -->
+      <img id="eggImage" src="egg-1.png" alt="Whole egg" />
+    </div>
+
+    <div id="timer" aria-live="polite">00:00</div>
+    <p id="status">Pick an egg time!</p>
+
+    <div class="controls" aria-label="Timer choices">
+      <button type="button" data-minutes="8">8 min</button>
+      <button type="button" data-minutes="10">10 min</button>
+      <button type="button" data-minutes="12">12 min</button>
+    </div>
+  </main>
+
+  <script>
+    const eggImage = document.querySelector("#eggImage");
+    const timerDisplay = document.querySelector("#timer");
+    const statusDisplay = document.querySelector("#status");
+    const timerButtons = document.querySelectorAll("[data-minutes]");
+
+    // Stages are checked from top to bottom against the percentage remaining.
+    // Add or edit entries here to change the egg progression later.
+    const eggStages = [
+      { minPercent: 100, src: "egg-1.png", alt: "Whole egg" },
+      { minPercent: 75, src: "egg-2.png", alt: "Egg with a small crack" },
+      { minPercent: 50, src: "egg-3.png", alt: "Egg with medium cracks" },
+      { minPercent: 1, src: "egg-4.png", alt: "Egg with large cracks" },
+      { minPercent: 0, src: "egg-5.png", alt: "Cracked egg with chick popping up" }
+    ];
+
+    let timerId = null;
+    let totalSeconds = 0;
+    let remainingSeconds = 0;
+    let audioContext = null;
+
+    function formatTime(seconds) {
+      const safeSeconds = Math.max(0, seconds);
+      const minutes = Math.floor(safeSeconds / 60);
+      const remainder = safeSeconds % 60;
+      return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+    }
+
+    function getEggStage(percentRemaining, isDone = false) {
+      if (isDone) {
+        return eggStages.at(-1);
+      }
+
+      return eggStages
+        .slice(0, -1)
+        .find((stage) => percentRemaining >= stage.minPercent) || eggStages.at(-2);
+    }
+
+    function updateDisplay() {
+      if (totalSeconds === 0) {
+        const idleStage = eggStages[0];
+        eggImage.src = idleStage.src;
+        eggImage.alt = idleStage.alt;
+        timerDisplay.textContent = formatTime(0);
+        return;
+      }
+
+      const percentRemaining = (remainingSeconds / totalSeconds) * 100;
+      const stage = getEggStage(percentRemaining, remainingSeconds === 0);
+
+      eggImage.src = stage.src;
+      eggImage.alt = stage.alt;
+      timerDisplay.textContent = formatTime(remainingSeconds);
+    }
+
+    function clearRunningTimer() {
+      if (timerId !== null) {
+        clearInterval(timerId);
+        timerId = null;
+      }
+    }
+
+    function prepareAudio() {
+      audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)();
+
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+    }
+
+    function playDing() {
+      prepareAudio();
+
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      const now = audioContext.currentTime;
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, now);
+      oscillator.frequency.exponentialRampToValueAtTime(1320, now + 0.12);
+
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.25, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.6);
+    }
+
+    function finishTimer() {
+      clearRunningTimer();
+      remainingSeconds = 0;
+      updateDisplay();
+      statusDisplay.textContent = "CHICK IS HERE!";
+      playDing();
+    }
+
+    function tick() {
+      remainingSeconds = Math.max(0, remainingSeconds - 1);
+      updateDisplay();
+
+      if (remainingSeconds === 0) {
+        finishTimer();
+      }
+    }
+
+    function startTimer(minutes) {
+      clearRunningTimer();
+      prepareAudio();
+      totalSeconds = minutes * 60;
+      remainingSeconds = totalSeconds;
+      statusDisplay.textContent = `${minutes} minute egg in progress`;
+      updateDisplay();
+      timerId = setInterval(tick, 1000);
+    }
+
+    timerButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        startTimer(Number(button.dataset.minutes));
+      });
+    });
+
+    updateDisplay();
+  </script>
+</body>
+</html>
