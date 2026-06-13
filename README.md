@@ -6,7 +6,7 @@ The timer shows a cracking egg as time passes, then reveals the chick when the e
 
 ## Demo
 
-<video src="assets/demo.mov" controls autoplay muted loop playsinline width="360"></video>
+![Always Perfect Eggs demo](assets/demo.gif)
 
 ## Features
 
