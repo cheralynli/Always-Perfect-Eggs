@@ -4,6 +4,10 @@ A pixel-art egg timer that can be installed on a phone as a Progressive Web App.
 
 The timer shows a cracking egg as time passes, then reveals the chick when the egg is ready.
 
+## Demo
+
+<video src="assets/demo.mov" controls autoplay muted loop playsinline width="360"></video>
+
 ## Features
 
 - 8, 10, and 12 minute egg timers
