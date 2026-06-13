@@ -3,6 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#fdf6e3" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Perfect Eggs" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
   <title>Always Perfect Eggs</title>
   <style>
     :root {
@@ -21,6 +27,7 @@
 
     body {
       min-height: 100vh;
+      min-height: 100dvh;
       margin: 0;
       display: grid;
       place-items: center;
@@ -34,6 +41,7 @@
       background-size: 32px 32px;
       color: var(--ink);
       font-family: "Courier New", Courier, monospace;
+      -webkit-tap-highlight-color: transparent;
     }
 
     main {
@@ -97,6 +105,7 @@
       box-shadow: 0 7px 0 var(--button-border);
       cursor: pointer;
       font: 900 1.1rem/1 "Courier New", Courier, monospace;
+      touch-action: manipulation;
       transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
     }
 
@@ -152,19 +161,28 @@
     const statusDisplay = document.querySelector("#status");
     const timerButtons = document.querySelectorAll("[data-minutes]");
 
-    // Stages are checked from top to bottom against the percentage remaining.
+    // Stages are checked from top to bottom against the percentage elapsed.
     // Add or edit entries here to change the egg progression later.
     const eggStages = [
-      { minPercent: 100, src: "egg-1.png", alt: "Whole egg" },
-      { minPercent: 75, src: "egg-2.png", alt: "Egg with a small crack" },
-      { minPercent: 50, src: "egg-3.png", alt: "Egg with medium cracks" },
-      { minPercent: 1, src: "egg-4.png", alt: "Egg with large cracks" },
-      { minPercent: 0, src: "egg-5.png", alt: "Cracked egg with chick popping up" }
+      { minElapsedPercent: 75, src: "egg-4.png", alt: "Egg with large cracks" },
+      { minElapsedPercent: 50, src: "egg-3.png", alt: "Egg with medium cracks" },
+      { minElapsedPercent: 25, src: "egg-2.png", alt: "Egg with a small crack" },
+      { minElapsedPercent: 0, src: "egg-1.png", alt: "Whole egg" }
     ];
+    const idleStage = {
+      src: "egg-1.png",
+      alt: "Whole egg"
+    };
+    const doneStage = {
+      src: "egg-5.png",
+      alt: "Cracked egg with chick popping up"
+    };
 
     let timerId = null;
+    let isTimerRunning = false;
     let totalSeconds = 0;
     let remainingSeconds = 0;
+    let endTime = 0;
     let audioContext = null;
 
     function formatTime(seconds) {
@@ -174,27 +192,24 @@
       return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
     }
 
-    function getEggStage(percentRemaining, isDone = false) {
+    function getEggStage(elapsedPercent, isDone = false) {
       if (isDone) {
-        return eggStages.at(-1);
+        return doneStage;
       }
 
-      return eggStages
-        .slice(0, -1)
-        .find((stage) => percentRemaining >= stage.minPercent) || eggStages.at(-2);
+      return eggStages.find((stage) => elapsedPercent >= stage.minElapsedPercent) || eggStages[eggStages.length - 1];
     }
 
     function updateDisplay() {
       if (totalSeconds === 0) {
-        const idleStage = eggStages[0];
         eggImage.src = idleStage.src;
         eggImage.alt = idleStage.alt;
         timerDisplay.textContent = formatTime(0);
         return;
       }
 
-      const percentRemaining = (remainingSeconds / totalSeconds) * 100;
-      const stage = getEggStage(percentRemaining, remainingSeconds === 0);
+      const elapsedPercent = ((totalSeconds - remainingSeconds) / totalSeconds) * 100;
+      const stage = getEggStage(elapsedPercent, remainingSeconds === 0);
 
       eggImage.src = stage.src;
       eggImage.alt = stage.alt;
@@ -206,6 +221,8 @@
         clearInterval(timerId);
         timerId = null;
       }
+
+      isTimerRunning = false;
     }
 
     function prepareAudio() {
@@ -241,12 +258,16 @@
       clearRunningTimer();
       remainingSeconds = 0;
       updateDisplay();
-      statusDisplay.textContent = "CHICK IS HERE!";
+      statusDisplay.textContent = "Your egg is ready!";
       playDing();
     }
 
     function tick() {
-      remainingSeconds = Math.max(0, remainingSeconds - 1);
+      if (!isTimerRunning) {
+        return;
+      }
+
+      remainingSeconds = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
       updateDisplay();
 
       if (remainingSeconds === 0) {
@@ -259,6 +280,8 @@
       prepareAudio();
       totalSeconds = minutes * 60;
       remainingSeconds = totalSeconds;
+      endTime = Date.now() + totalSeconds * 1000;
+      isTimerRunning = true;
       statusDisplay.textContent = `${minutes} minute egg in progress`;
       updateDisplay();
       timerId = setInterval(tick, 1000);
@@ -271,6 +294,12 @@
     });
 
     updateDisplay();
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js");
+      });
+    }
   </script>
 </body>
 </html>
